@@ -25,7 +25,7 @@
 
         let currentEditId = null;
         let allMaterials = [];
-        let activeDetailId = null; // 현재 펼쳐진 상세 정보 ID
+        let activeDetailId = null;
 
         window.login = async function() {
             const idInput = document.getElementById('login-id').value.trim();
@@ -70,11 +70,11 @@
                 const cost = item.cost || 0;
                 const quantity = item.quantity || 0;
                 const total = cost * quantity;
+                const isActive = activeDetailId === item.id;
                 
-                // 메인 행
                 const tr = document.createElement('tr');
-                tr.className = 'clickable-row';
-                tr.onclick = (e) => { e.stopPropagation(); toggleDetail(item.id); };
+                tr.className = `material-row ${isActive ? 'active' : ''}`;
+                tr.onclick = () => toggleDetail(item.id);
                 tr.innerHTML = `
                     <td data-label="품명"><strong>${item.name}</strong></td>
                     <td data-label="원가" class="text-right">₩${cost.toLocaleString()}</td>
@@ -83,43 +83,34 @@
                 `;
                 listBody.appendChild(tr);
 
-                // 상세 카드 행 (기본 숨김)
-                const detailTr = document.createElement('tr');
-                detailTr.id = `detail-${item.id}`;
-                detailTr.className = 'detail-row';
-                detailTr.style.display = 'none';
-                detailTr.innerHTML = `
-                    <td colspan="4">
-                        <div class="detail-card">
-                            <div class="detail-grid">
-                                <div><small>제조사</small><div>${item.manufacturer || '-'}</div></div>
-                                <div><small>구매처</small><div>${item.vendor || '-'}</div></div>
-                                <div class="full-width"><small>설명</small><div>${item.description || '-'}</div></div>
-                                <div class="full-width"><small>기타 메모</small><div>${item.memo || '-'}</div></div>
+                if (isActive) {
+                    const detailTr = document.createElement('tr');
+                    detailTr.className = 'detail-row';
+                    detailTr.innerHTML = `
+                        <td colspan="4">
+                            <div class="mobile-detail-box">
+                                <div class="info-grid">
+                                    <div class="info-item"><label>제조사</label><span>${item.manufacturer || '-'}</span></div>
+                                    <div class="info-item"><label>구매처</label><span>${item.vendor || '-'}</span></div>
+                                    <div class="info-item full"><label>설명</label><span>${item.description || '-'}</span></div>
+                                    <div class="info-item full"><label>기타 메모</label><span>${item.memo || '-'}</span></div>
+                                </div>
+                                <div class="action-footer">
+                                    <button onclick="editMaterial('${item.id}'); event.stopPropagation();" class="btn-edit"><i data-lucide="edit-2"></i> 수정</button>
+                                    <button onclick="deleteMaterial('${item.id}'); event.stopPropagation();" class="btn-del"><i data-lucide="trash-2"></i> 삭제</button>
+                                </div>
                             </div>
-                            <div class="detail-actions">
-                                <button onclick="editMaterial('${item.id}'); event.stopPropagation();" class="compact-btn edit"><i data-lucide="edit-2" style="width:14px;"></i> 수정</button>
-                                <button onclick="deleteMaterial('${item.id}'); event.stopPropagation();" class="compact-btn del"><i data-lucide="trash-2" style="width:14px;"></i> 삭제</button>
-                            </div>
-                        </div>
-                    </td>
-                `;
-                listBody.appendChild(detailTr);
+                        </td>
+                    `;
+                    listBody.appendChild(detailTr);
+                }
             });
             lucide.createIcons();
         };
 
         window.toggleDetail = function(id) {
-            const prevDetail = document.getElementById(`detail-${activeDetailId}`);
-            if(prevDetail) prevDetail.style.display = 'none';
-
-            if (activeDetailId === id) {
-                activeDetailId = null;
-            } else {
-                const currentDetail = document.getElementById(`detail-${id}`);
-                if(currentDetail) currentDetail.style.display = 'table-row';
-                activeDetailId = id;
-            }
+            activeDetailId = activeDetailId === id ? null : id;
+            renderMaterials(allMaterials);
         };
 
         window.searchMaterials = function(keyword) {
@@ -202,6 +193,7 @@
         .logo { font-size: 1.2rem; font-weight: 800; color: var(--primary); margin-bottom: 1.5rem; display: flex; align-items: center; gap: 6px; }
         .menu-item { padding: 0.6rem 0.8rem; margin-bottom: 0.2rem; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: 0.2s; color: #64748b; font-size: 0.9rem; }
         .menu-item:hover, .menu-item.active { background: var(--primary); color: #fff; }
+        
         .section { display: none; background: #fff; padding: 1rem; border-radius: 8px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
         .header-bar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0.5rem; margin-bottom: 1rem; }
         .search-container { position: relative; flex: 1; min-width: 200px; }
@@ -211,26 +203,28 @@
         button { padding: 0.5rem 1rem; border-radius: 6px; border: none; cursor: pointer; font-weight: 600; font-size: 0.85rem; display: flex; align-items: center; gap: 4px; }
         .btn-primary { background: var(--primary); color: #fff; }
         .btn-excel { background: #10b981; color: #fff; }
-        
-        /* 테이블 스타일 개선 */
+
+        /* 테이블 및 목록 스타일 */
         table { width: 100%; border-collapse: collapse; }
         th { background: #f8fafc; text-align: left; padding: 0.6rem; font-size: 0.8rem; color: #64748b; border-bottom: 1px solid var(--border); }
-        td { padding: 0.6rem; border-bottom: 1px solid #f1f5f9; font-size: 0.9rem; }
+        .material-row { cursor: pointer; transition: background 0.1s; }
+        .material-row:hover { background: #f8fafc; }
+        .material-row.active { background: #eff6ff; }
+        td { padding: 0.7rem 0.6rem; border-bottom: 1px solid #f1f5f9; font-size: 0.9rem; }
         .text-right { text-align: right; }
+
+        /* 상세 정보 박스 (모바일/PC 공통 개선) */
+        .detail-row td { padding: 0; border-bottom: 1px solid var(--border); background: #fcfdfe; }
+        .mobile-detail-box { padding: 1rem; border-left: 4px solid var(--primary); margin: 0.5rem; background: #fff; border-radius: 0 8px 8px 0; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+        .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 1rem; }
+        .info-item label { display: block; font-size: 0.75rem; color: #94a3b8; font-weight: 700; margin-bottom: 2px; }
+        .info-item span { font-size: 0.9rem; color: var(--text); font-weight: 500; }
+        .info-item.full { grid-column: span 2; border-top: 1px dashed #f1f5f9; padding-top: 8px; }
         
-        .clickable-row { cursor: pointer; transition: background 0.1s; }
-        .clickable-row:hover { background: #f1f5f9; }
-        
-        /* 상세 카드 스타일 */
-        .detail-row td { background: #f8fafc; padding: 0; border-bottom: 2px solid var(--border); }
-        .detail-card { padding: 1rem; border-left: 4px solid var(--primary); background: #fff; margin: 0.5rem; border-radius: 0 8px 8px 0; box-shadow: inset 0 2px 4px rgba(0,0,0,0.05); }
-        .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 1rem; }
-        .detail-grid small { color: #94a3b8; display: block; margin-bottom: 2px; font-weight: 700; }
-        .full-width { grid-column: span 2; }
-        .detail-actions { display: flex; gap: 10px; border-top: 1px solid #f1f5f9; padding-top: 10px; }
-        .compact-btn { padding: 0.4rem 0.8rem; font-size: 0.8rem; border-radius: 6px; }
-        .compact-btn.edit { background: #dbeafe; color: var(--primary); }
-        .compact-btn.del { background: #fee2e2; color: #ef4444; }
+        .action-footer { display: flex; gap: 10px; border-top: 1px solid #f1f5f9; padding-top: 10px; }
+        .action-footer button { flex: 1; justify-content: center; padding: 0.6rem; font-size: 0.8rem; }
+        .btn-edit { background: #dbeafe; color: var(--primary); }
+        .btn-del { background: #fee2e2; color: #ef4444; }
 
         .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: none; justify-content: center; align-items: center; z-index: 1000; padding: 10px; }
         .modal-content { background: #fff; padding: 1.5rem; border-radius: 12px; width: 100%; max-width: 450px; }
@@ -241,15 +235,19 @@
             .logo { display: none; }
             .menu-item { flex-direction: column; font-size: 0.7rem; padding: 0.4rem; gap: 2px; }
             main { padding: 0.8rem; }
+            
+            /* 모바일 테이블을 리스트 카드로 변환 */
             table, thead, tbody, th, td, tr { display: block; }
             thead tr { position: absolute; top: -9999px; left: -9999px; }
-            tr { border: 1px solid var(--border); border-radius: 6px; margin-bottom: 0.4rem; padding: 0.4rem; background: #fff; }
-            td { border: none; position: relative; padding-left: 35%; text-align: right; padding-bottom: 0.3rem; min-height: 25px; border-bottom: 1px solid #f8fafc; }
-            td:last-child { border-bottom: none; }
-            td:before { content: attr(data-label); position: absolute; left: 8px; font-weight: 700; color: #94a3b8; font-size: 0.75rem; top: 50%; transform: translateY(-50%); }
-            .detail-row td:before { content: none; }
-            .detail-row td { padding: 0; }
-            .detail-grid { grid-template-columns: 1fr; }
+            .material-row { border: 1px solid var(--border); border-radius: 8px; margin-bottom: 0.5rem; padding: 0.6rem; background: #fff; }
+            .material-row.active { border-color: var(--primary); margin-bottom: 0; border-radius: 8px 8px 0 0; }
+            td { border: none; position: relative; padding-left: 35% !important; text-align: right !important; padding-bottom: 0.4rem; }
+            td:before { content: attr(data-label); position: absolute; left: 10px; font-weight: 700; color: #94a3b8; font-size: 0.75rem; top: 50%; transform: translateY(-50%); }
+            
+            .detail-row { border: 1px solid var(--primary); border-top: none; border-radius: 0 0 8px 8px; margin-bottom: 0.8rem; }
+            .mobile-detail-box { margin: 0; border-left: none; box-shadow: none; border-radius: 0; }
+            .info-grid { grid-template-columns: 1fr; }
+            .info-item.full { grid-column: span 1; }
         }
 
         #login-section { height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 1rem; }
