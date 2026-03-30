@@ -6,13 +6,10 @@
     <title>C-DATA | 통합 자재 관리 시스템</title>
     <!-- Firebase SDK (v10+) -->
     <script type="module">
-        // Firebase 앱 및 서비스 로드 (가이드용)
-        // 실제 사용 시 여기에 본인의 Firebase 설정값을 입력해야 합니다.
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getAuth } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-        import { getFirestore } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getFirestore, doc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-        // TODO: Firebase Console에서 앱 설정을 복사하여 아래를 채워주세요.
+        // Firebase 설정 (본인의 설정값으로 교체 필요)
         const firebaseConfig = {
             apiKey: "YOUR_API_KEY",
             authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
@@ -22,10 +19,60 @@
             appId: "YOUR_APP_ID"
         };
 
-        // Firebase 초기화 (설정값이 올바르지 않으면 오류가 발생할 수 있습니다)
+        // 초기화 (실제 연동 시 아래 주석을 해제하세요)
         // const app = initializeApp(firebaseConfig);
-        // const auth = getAuth(app);
         // const db = getFirestore(app);
+
+        // 로그인 로직
+        window.login = async function() {
+            const idInput = document.getElementById('login-id').value;
+            const pwInput = document.getElementById('login-pw').value;
+
+            // [임시 하드코딩 검증]
+            if (idInput === 'batman' && pwInput === 'forever') {
+                alert('로그인 성공!');
+                enterSystem();
+            } else {
+                // [Firestore 연동 시 로직 예시]
+                /*
+                try {
+                    const adminDoc = await getDoc(doc(db, "users", "admin"));
+                    if (adminDoc.exists()) {
+                        const data = adminDoc.data();
+                        if (data.id === idInput && data.pw === pwInput) {
+                            enterSystem();
+                        } else {
+                            alert('아이디 또는 비밀번호가 틀립니다.');
+                        }
+                    }
+                } catch (e) {
+                    console.error("로그인 오류:", e);
+                    alert('데이터베이스 연결에 실패했습니다.');
+                }
+                */
+                alert('아이디 또는 비밀번호가 올바르지 않습니다.');
+            }
+        };
+
+        // 계정 정보 수정 로직
+        window.saveProfile = async function() {
+            const newId = document.getElementById('new-id').value;
+            const newPw = document.getElementById('new-pw').value;
+            
+            if(!newId || !newPw) return alert('변경할 정보를 입력해주세요.');
+
+            // 실제 저장 시뮬레이션
+            alert(`정보가 변경되었습니다.\n새 아이디: ${newId}\n(Firestore 연동 시 데이터베이스에 반영됩니다.)`);
+            
+            // [Firestore 업데이트 예시]
+            // await updateDoc(doc(db, "users", "admin"), { id: newId, pw: newPw });
+        };
+
+        function enterSystem() {
+            document.getElementById('login-section').classList.remove('active');
+            document.getElementById('sidebar').style.display = 'flex';
+            document.getElementById('material-section').classList.add('active');
+        }
     </script>
     <style>
         :root {
@@ -36,7 +83,7 @@
         }
 
         body {
-            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+            font-family: 'Pretendard', sans-serif;
             margin: 0;
             display: flex;
             background-color: var(--bg-color);
@@ -44,7 +91,6 @@
             height: 100vh;
         }
 
-        /* 사이드바 */
         nav {
             width: var(--sidebar-width);
             background: #ffffff;
@@ -54,90 +100,43 @@
             padding: 1.5rem;
         }
 
-        .logo {
-            font-size: 1.5rem;
-            font-weight: 800;
-            color: var(--primary-color);
-            margin-bottom: 2rem;
-        }
+        .logo { font-size: 1.5rem; font-weight: 800; color: var(--primary-color); margin-bottom: 2rem; }
 
         .menu-item {
-            padding: 0.75rem 1rem;
-            margin-bottom: 0.5rem;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.2s;
-            text-decoration: none;
-            color: inherit;
+            padding: 0.75rem 1rem; margin-bottom: 0.5rem; border-radius: 8px;
+            cursor: pointer; transition: all 0.2s; text-decoration: none; color: inherit;
         }
 
-        .menu-item:hover, .menu-item.active {
-            background-color: var(--primary-color);
-            color: white;
-        }
+        .menu-item:hover, .menu-item.active { background-color: var(--primary-color); color: white; }
 
-        /* 메인 콘텐츠 */
-        main {
-            flex: 1;
-            padding: 2rem;
-            overflow-y: auto;
-        }
+        main { flex: 1; padding: 2rem; overflow-y: auto; }
 
         .section {
-            display: none;
-            background: white;
-            padding: 2rem;
-            border-radius: 12px;
-            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+            display: none; background: white; padding: 2rem;
+            border-radius: 12px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
         }
 
-        .section.active {
-            display: block;
-        }
+        .section.active { display: block; }
 
-        /* 로그인 레이아웃 (임시) */
-        #login-section {
-            max-width: 400px;
-            margin: 100px auto;
-        }
+        #login-section { max-width: 400px; margin: 100px auto; text-align: center; }
 
         input {
-            width: 100%;
-            padding: 0.75rem;
-            margin: 0.5rem 0;
-            border: 1px solid #cbd5e1;
-            border-radius: 6px;
-            box-sizing: border-box;
+            width: 100%; padding: 0.75rem; margin: 0.5rem 0;
+            border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box;
         }
 
         button {
-            width: 100%;
-            padding: 0.75rem;
-            background: var(--primary-color);
-            color: white;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: 600;
+            width: 100%; padding: 0.75rem; background: var(--primary-color);
+            color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;
         }
 
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 1rem;
-        }
-
-        th, td {
-            text-align: left;
-            padding: 1rem;
-            border-bottom: 1px solid #e2e8f0;
-        }
-
-        .status {
-            font-size: 0.8rem;
-            color: #64748b;
-            margin-top: 1rem;
-        }
+        .profile-group { margin-bottom: 1.5rem; max-width: 400px; }
+        .profile-group label { display: block; margin-bottom: 0.5rem; font-weight: bold; }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+        th, td { text-align: left; padding: 1rem; border-bottom: 1px solid #e2e8f0; }
+        
+        .status-box { background: #f1f5f9; padding: 1rem; border-radius: 6px; font-size: 0.85rem; margin-top: 1rem; }
     </style>
 </head>
 <body>
@@ -154,84 +153,76 @@
     <main>
         <!-- 로그인 섹션 -->
         <div id="login-section" class="section active">
-            <h2>로그인</h2>
-            <p>가이드: 파이어베이스 이메일 인증을 사용합니다.</p>
-            <input type="email" id="email" placeholder="이메일">
-            <input type="password" id="password" placeholder="비밀번호">
-            <button onclick="login()">로그인</button>
-            <div class="status">실제 연동을 위해 Firebase API Key가 필요합니다.</div>
+            <h1 style="color: var(--primary-color)">C-DATA</h1>
+            <p>관리자 로그인 (batman / forever)</p>
+            <input type="text" id="login-id" placeholder="아이디">
+            <input type="password" id="login-pw" placeholder="비밀번호">
+            <button onclick="login()">접속하기</button>
+            <div class="status-box">기본 계정: batman / 비번: forever</div>
         </div>
 
-        <!-- 자재관리 섹션 -->
+        <!-- 자재관리 -->
         <div id="material-section" class="section">
-            <h2>자재관리</h2>
-            <p>실시간 재고 현황 (Firestore 연동 예정)</p>
-            <button style="width: auto; margin-bottom: 1rem;">+ 새 자재 등록</button>
+            <h2>자재 실시간 관리</h2>
+            <button style="width: auto; margin-bottom: 1rem;">+ 새 자재 추가</button>
             <table>
                 <thead>
-                    <tr>
-                        <th>품명</th>
-                        <th>수량</th>
-                        <th>위치</th>
-                        <th>상태</th>
-                    </tr>
+                    <tr><th>품목명</th><th>재고량</th><th>보관위치</th><th>최근수정</th></tr>
                 </thead>
                 <tbody>
-                    <tr>
-                        <td>기본 자재 A</td>
-                        <td>150</td>
-                        <td>창고 1</td>
-                        <td>정상</td>
-                    </tr>
+                    <tr><td>샘플 자재</td><td>100</td><td>A-1 선반</td><td>2024-03-30</td></tr>
                 </tbody>
             </table>
         </div>
 
-        <!-- 업체관리 섹션 -->
+        <!-- 업체관리 -->
         <div id="company-section" class="section">
-            <h2>업체관리</h2>
-            <p>협력 업체 정보 및 연락처 관리 섹션입니다.</p>
+            <h2>업체 정보 관리</h2>
+            <p>협력 업체 리스트 및 연락처를 관리합니다.</p>
         </div>
 
-        <!-- 매출관리 섹션 -->
+        <!-- 매출관리 -->
         <div id="sales-section" class="section">
-            <h2>매출관리</h2>
-            <p>월별/항목별 매출 통계 및 데이터 관리 섹션입니다.</p>
+            <h2>매출 현황</h2>
+            <p>일별/월별 매출 데이터를 집계합니다.</p>
         </div>
 
-        <!-- 계정설정 섹션 -->
+        <!-- 계정설정 -->
         <div id="profile-section" class="section">
-            <h2>계정설정</h2>
-            <p>로그인 정보(아이디/비밀번호)를 수정할 수 있습니다.</p>
-            <label>비밀번호 변경</label>
-            <input type="password" placeholder="새 비밀번호">
-            <button style="width: auto;">변경 내용 저장</button>
+            <h2>계정 정보 수정</h2>
+            <p>데이터베이스에 저장될 로그인 정보를 업데이트합니다.</p>
+            <div class="profile-group">
+                <label>아이디 변경</label>
+                <input type="text" id="new-id" value="batman">
+            </div>
+            <div class="profile-group">
+                <label>비밀번호 변경</label>
+                <input type="password" id="new-pw" value="forever">
+            </div>
+            <button onclick="saveProfile()" style="width: auto;">DB 정보 업데이트</button>
         </div>
     </main>
 
     <script>
-        // 화면 전환 로직
         function showSection(sectionId) {
             document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
             document.querySelectorAll('.menu-item').forEach(m => m.classList.remove('active'));
-            
             document.getElementById(sectionId + '-section').classList.add('active');
-            event.target.classList.add('active');
+            
+            // 메뉴 활성화 처리
+            const items = document.querySelectorAll('.menu-item');
+            items.forEach(item => {
+                if(item.innerText.includes(getMenuName(sectionId))) item.classList.add('active');
+            });
         }
 
-        // 로그인 시뮬레이션
-        function login() {
-            // 실제 구현 시 Firebase Auth 연동
-            alert('가이드 모드: 로그인을 시뮬레이션합니다.');
-            document.getElementById('login-section').classList.remove('active');
-            document.getElementById('sidebar').style.display = 'flex';
-            document.getElementById('material-section').classList.add('active');
+        function getMenuName(id) {
+            const names = { material: '자재', company: '업체', sales: '매출', profile: '계정' };
+            return names[id];
         }
 
         function logout() {
-            if(confirm('로그아웃 하시겠습니까?')) {
-                location.reload();
-            }
+            if(confirm('로그아웃 하시겠습니까?')) location.reload();
         }
     </script>
 </body>
