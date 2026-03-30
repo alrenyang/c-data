@@ -66,13 +66,17 @@
             const listBody = document.getElementById('material-list');
             listBody.innerHTML = '';
             data.forEach((item) => {
+                const cost = item.cost || 0;
+                const quantity = item.quantity || 0;
+                const total = cost * quantity;
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td data-label="품명"><strong>${item.name}</strong></td>
                     <td data-label="제조사">${item.manufacturer || '-'}</td>
                     <td data-label="구매처">${item.vendor || '-'}</td>
-                    <td data-label="원가" class="text-right">₩${(item.cost || 0).toLocaleString()}</td>
-                    <td data-label="수량" class="text-right">${(item.quantity || 0).toLocaleString()}</td>
+                    <td data-label="원가" class="text-right">₩${cost.toLocaleString()}</td>
+                    <td data-label="합계" class="text-right" style="color: var(--primary); font-weight: 700;">₩${total.toLocaleString()}</td>
+                    <td data-label="수량" class="text-right">${quantity.toLocaleString()}</td>
                     <td class="action-btns">
                         <button onclick="editMaterial('${item.id}')" class="compact-btn edit">수정</button>
                         <button onclick="deleteMaterial('${item.id}')" class="compact-btn del">삭제</button>
@@ -95,7 +99,7 @@
             if(allMaterials.length === 0) return alert('데이터가 없습니다.');
             const excelData = allMaterials.map(item => ({
                 "품명": item.name, "제조업체": item.manufacturer, "설명": item.description,
-                "구매업체": item.vendor, "구매원가": item.cost, "현재수량": item.quantity, "메모": item.memo
+                "구매업체": item.vendor, "구매원가": item.cost, "합계금액": (item.cost || 0) * (item.quantity || 0), "현재수량": item.quantity, "메모": item.memo
             }));
             const ws = XLSX.utils.json_to_sheet(excelData);
             const wb = XLSX.utils.book_new();
@@ -231,7 +235,7 @@
                 </div>
                 <table>
                     <thead>
-                        <tr><th>품명</th><th>제조사</th><th>구매처</th><th class="text-right">원가</th><th class="text-right">수량</th><th>관리</th></tr>
+                        <tr><th>품명</th><th>제조사</th><th>구매처</th><th class="text-right">원가</th><th class="text-right">합계금액</th><th class="text-right">수량</th><th>관리</th></tr>
                     </thead>
                     <tbody id="material-list"></tbody>
                 </table>
