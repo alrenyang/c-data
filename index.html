@@ -25,6 +25,7 @@
 
         let currentEditId = null;
         let allMaterials = [];
+        let activeDetailId = null; // 현재 펼쳐진 상세 정보 ID
 
         window.login = async function() {
             const idInput = document.getElementById('login-id').value.trim();
@@ -69,28 +70,61 @@
                 const cost = item.cost || 0;
                 const quantity = item.quantity || 0;
                 const total = cost * quantity;
+                
+                // 메인 행
                 const tr = document.createElement('tr');
+                tr.className = 'clickable-row';
+                tr.onclick = (e) => { e.stopPropagation(); toggleDetail(item.id); };
                 tr.innerHTML = `
                     <td data-label="품명"><strong>${item.name}</strong></td>
-                    <td data-label="제조사">${item.manufacturer || '-'}</td>
-                    <td data-label="구매처">${item.vendor || '-'}</td>
                     <td data-label="원가" class="text-right">₩${cost.toLocaleString()}</td>
-                    <td data-label="합계" class="text-right" style="color: var(--primary); font-weight: 700;">₩${total.toLocaleString()}</td>
                     <td data-label="수량" class="text-right">${quantity.toLocaleString()}</td>
-                    <td class="action-btns">
-                        <button onclick="editMaterial('${item.id}')" class="compact-btn edit">수정</button>
-                        <button onclick="deleteMaterial('${item.id}')" class="compact-btn del">삭제</button>
-                    </td>
+                    <td data-label="합계" class="text-right" style="color: var(--primary); font-weight: 700;">₩${total.toLocaleString()}</td>
                 `;
                 listBody.appendChild(tr);
+
+                // 상세 카드 행 (기본 숨김)
+                const detailTr = document.createElement('tr');
+                detailTr.id = `detail-${item.id}`;
+                detailTr.className = 'detail-row';
+                detailTr.style.display = 'none';
+                detailTr.innerHTML = `
+                    <td colspan="4">
+                        <div class="detail-card">
+                            <div class="detail-grid">
+                                <div><small>제조사</small><div>${item.manufacturer || '-'}</div></div>
+                                <div><small>구매처</small><div>${item.vendor || '-'}</div></div>
+                                <div class="full-width"><small>설명</small><div>${item.description || '-'}</div></div>
+                                <div class="full-width"><small>기타 메모</small><div>${item.memo || '-'}</div></div>
+                            </div>
+                            <div class="detail-actions">
+                                <button onclick="editMaterial('${item.id}'); event.stopPropagation();" class="compact-btn edit"><i data-lucide="edit-2" style="width:14px;"></i> 수정</button>
+                                <button onclick="deleteMaterial('${item.id}'); event.stopPropagation();" class="compact-btn del"><i data-lucide="trash-2" style="width:14px;"></i> 삭제</button>
+                            </div>
+                        </div>
+                    </td>
+                `;
+                listBody.appendChild(detailTr);
             });
+            lucide.createIcons();
+        };
+
+        window.toggleDetail = function(id) {
+            const prevDetail = document.getElementById(`detail-${activeDetailId}`);
+            if(prevDetail) prevDetail.style.display = 'none';
+
+            if (activeDetailId === id) {
+                activeDetailId = null;
+            } else {
+                const currentDetail = document.getElementById(`detail-${id}`);
+                if(currentDetail) currentDetail.style.display = 'table-row';
+                activeDetailId = id;
+            }
         };
 
         window.searchMaterials = function(keyword) {
             const filtered = allMaterials.filter(item => 
-                item.name.toLowerCase().includes(keyword.toLowerCase()) ||
-                (item.manufacturer && item.manufacturer.toLowerCase().includes(keyword.toLowerCase())) ||
-                (item.vendor && item.vendor.toLowerCase().includes(keyword.toLowerCase()))
+                item.name.toLowerCase().includes(keyword.toLowerCase())
             );
             renderMaterials(filtered);
         };
@@ -147,6 +181,7 @@
         window.formatNumberInput = function(i) { let v = i.value.replace(/[^0-9]/g, ''); i.value = v ? Number(v).toLocaleString() : ''; };
         window.openModal = () => document.getElementById('mat-modal').style.display = 'flex';
         window.closeModal = () => { document.getElementById('mat-modal').style.display = 'none'; document.getElementById('mat-form').reset(); currentEditId = null; };
+        
         window.showSection = (id) => {
             document.querySelectorAll('.section').forEach(s => s.style.display = 'none');
             document.querySelectorAll('.menu-item').forEach(m => m.classList.remove('active'));
@@ -176,13 +211,27 @@
         button { padding: 0.5rem 1rem; border-radius: 6px; border: none; cursor: pointer; font-weight: 600; font-size: 0.85rem; display: flex; align-items: center; gap: 4px; }
         .btn-primary { background: var(--primary); color: #fff; }
         .btn-excel { background: #10b981; color: #fff; }
-        .compact-btn { padding: 0.25rem 0.5rem; font-size: 0.75rem; border: 1px solid var(--border); background: #f8fafc; border-radius: 4px; }
-        .compact-btn.edit:hover { background: #dbeafe; color: var(--primary); }
-        .compact-btn.del:hover { background: #fee2e2; color: #ef4444; }
+        
+        /* 테이블 스타일 개선 */
         table { width: 100%; border-collapse: collapse; }
         th { background: #f8fafc; text-align: left; padding: 0.6rem; font-size: 0.8rem; color: #64748b; border-bottom: 1px solid var(--border); }
         td { padding: 0.6rem; border-bottom: 1px solid #f1f5f9; font-size: 0.9rem; }
         .text-right { text-align: right; }
+        
+        .clickable-row { cursor: pointer; transition: background 0.1s; }
+        .clickable-row:hover { background: #f1f5f9; }
+        
+        /* 상세 카드 스타일 */
+        .detail-row td { background: #f8fafc; padding: 0; border-bottom: 2px solid var(--border); }
+        .detail-card { padding: 1rem; border-left: 4px solid var(--primary); background: #fff; margin: 0.5rem; border-radius: 0 8px 8px 0; box-shadow: inset 0 2px 4px rgba(0,0,0,0.05); }
+        .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 1rem; }
+        .detail-grid small { color: #94a3b8; display: block; margin-bottom: 2px; font-weight: 700; }
+        .full-width { grid-column: span 2; }
+        .detail-actions { display: flex; gap: 10px; border-top: 1px solid #f1f5f9; padding-top: 10px; }
+        .compact-btn { padding: 0.4rem 0.8rem; font-size: 0.8rem; border-radius: 6px; }
+        .compact-btn.edit { background: #dbeafe; color: var(--primary); }
+        .compact-btn.del { background: #fee2e2; color: #ef4444; }
+
         .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: none; justify-content: center; align-items: center; z-index: 1000; padding: 10px; }
         .modal-content { background: #fff; padding: 1.5rem; border-radius: 12px; width: 100%; max-width: 450px; }
         
@@ -194,11 +243,13 @@
             main { padding: 0.8rem; }
             table, thead, tbody, th, td, tr { display: block; }
             thead tr { position: absolute; top: -9999px; left: -9999px; }
-            tr { border: 1px solid var(--border); border-radius: 6px; margin-bottom: 0.6rem; padding: 0.4rem; background: #fff; }
+            tr { border: 1px solid var(--border); border-radius: 6px; margin-bottom: 0.4rem; padding: 0.4rem; background: #fff; }
             td { border: none; position: relative; padding-left: 35%; text-align: right; padding-bottom: 0.3rem; min-height: 25px; border-bottom: 1px solid #f8fafc; }
             td:last-child { border-bottom: none; }
             td:before { content: attr(data-label); position: absolute; left: 8px; font-weight: 700; color: #94a3b8; font-size: 0.75rem; top: 50%; transform: translateY(-50%); }
-            .action-btns { padding-left: 0.4rem; display: flex; justify-content: flex-end; gap: 5px; margin-top: 5px; border: none; }
+            .detail-row td:before { content: none; }
+            .detail-row td { padding: 0; }
+            .detail-grid { grid-template-columns: 1fr; }
         }
 
         #login-section { height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 1rem; }
@@ -227,7 +278,7 @@
         <main>
             <div id="material-section" class="section">
                 <div class="header-bar">
-                    <div class="search-container"><i data-lucide="search" class="search-icon"></i><input type="text" placeholder="검색..." oninput="searchMaterials(this.value)"></div>
+                    <div class="search-container"><i data-lucide="search" class="search-icon"></i><input type="text" placeholder="품명 검색..." oninput="searchMaterials(this.value)"></div>
                     <div class="btn-group">
                         <button onclick="downloadExcel()" class="btn-excel"><i data-lucide="file-spread_sheet"></i> 엑셀</button>
                         <button onclick="openModal()" class="btn-primary"><i data-lucide="plus"></i> 추가</button>
@@ -235,7 +286,7 @@
                 </div>
                 <table>
                     <thead>
-                        <tr><th>품명</th><th>제조사</th><th>구매처</th><th class="text-right">원가</th><th class="text-right">합계금액</th><th class="text-right">수량</th><th>관리</th></tr>
+                        <tr><th>품명</th><th class="text-right">원가</th><th class="text-right">수량</th><th class="text-right">합계금액</th></tr>
                     </thead>
                     <tbody id="material-list"></tbody>
                 </table>
