@@ -9,8 +9,9 @@
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, enableNetwork, disableNetwork } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
+        // 파이어베이스 설정값 (사용자 설정 유지)
         const firebaseConfig = {
             apiKey: "AIzaSyCQJVKPhQ3IF4XAey6uWtrav68TIhLnXiQ",
             authDomain: "c-data-e792d.firebaseapp.com",
@@ -33,8 +34,14 @@
             
             if(!idInput || !pwInput) return alert('아이디와 비밀번호를 입력해주세요.');
 
+            const btn = event.target;
+            btn.disabled = true;
+            btn.innerText = "연결 중...";
+
             try {
-                console.log("로그인 시도 중...");
+                // 네트워크 강제 재연결 시도 (오프라인 에러 방지)
+                await enableNetwork(db);
+                
                 const adminRef = doc(db, "users", "admin");
                 const adminDoc = await getDoc(adminRef);
 
@@ -46,8 +53,7 @@
                         alert('아이디 또는 비밀번호가 틀립니다.');
                     }
                 } else if (idInput === 'batman' && pwInput === 'forever') {
-                    // DB에 관리자 정보가 없을 경우 초기 생성 시도
-                    console.log("초기 계정 생성 시도...");
+                    // 초기 생성 시도
                     await setDoc(adminRef, { id: 'batman', pw: 'forever' });
                     alert('관리자 계정이 생성되었습니다. 다시 접속합니다.');
                     enterSystem();
@@ -55,12 +61,16 @@
                     alert('등록된 계정이 없습니다. (초기 계정: batman / forever)');
                 }
             } catch (e) {
-                console.error("로그인 에러 상세:", e);
-                if (e.code === 'permission-denied') {
-                    alert('파이어베이스 권한 거부: Firestore Rules를 공개(true)로 설정했는지 확인해주세요.');
+                console.error("Firebase Login Error:", e);
+                // "Offline" 에러 발생 시 안내 메시지 강화
+                if (e.message.includes('offline') || e.code === 'unavailable') {
+                    alert('서버 연결 실패: 파이어베이스 콘솔에서 "Firestore Database"를 생성(만들기)했는지 꼭 확인해주세요!');
                 } else {
-                    alert('시스템 오류: ' + e.message);
+                    alert('접속 오류: ' + e.message);
                 }
+            } finally {
+                btn.disabled = false;
+                btn.innerText = "접속하기";
             }
         };
 
@@ -78,7 +88,7 @@
                 allMaterials = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 renderMaterials(allMaterials);
             }, (error) => {
-                console.error("데이터 로드 에러:", error);
+                console.error("Data Load Error:", error);
             });
         }
 
@@ -185,7 +195,6 @@
             document.querySelectorAll('.menu-item').forEach(m => m.classList.remove('active'));
             document.getElementById(id + '-section').style.display = 'block';
             
-            // 클릭된 메뉴 하이라이트 (버튼 클릭 시)
             const targetMenu = Array.from(document.querySelectorAll('.menu-item')).find(m => m.onclick.toString().includes(id));
             if(targetMenu) targetMenu.classList.add('active');
         };
