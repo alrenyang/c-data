@@ -53,10 +53,12 @@
                 
                 if (adminDoc.exists()) {
                     const data = adminDoc.data();
-                    if (data.id === idInput && data.pw === pwInput) {
-                        enterSystem();
+                    if (data.id !== idInput) {
+                        alert('존재하지 않는 아이디입니다. 다시 확인해 주세요.');
+                    } else if (data.pw !== pwInput) {
+                        alert('비밀번호가 일치하지 않습니다.');
                     } else {
-                        alert('아이디 또는 비밀번호가 틀립니다.');
+                        enterSystem();
                     }
                 } else if (idInput === 'batman' && pwInput === 'forever') {
                     await setDoc(adminRef, { id: 'batman', pw: 'forever' });
