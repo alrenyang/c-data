@@ -24,7 +24,7 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
 
-        const APP_VERSION = "1.1.0 (24.04.10)";
+        const APP_VERSION = "1.2.0 (24.04.10)";
 
         let currentEditId = null;
         let allMaterials = [];
@@ -37,6 +37,11 @@
         let allDeliveries = [];
         let activeDeliveryDetailId = null;
         let currentDeliveryEditId = null;
+
+        let activeSalesDetailId = null;
+        let salesFilterYear = new Date().getFullYear();
+        let salesFilterMonth = new Date().getMonth() + 1;
+        let salesViewMode = 'monthly'; // 'yearly' or 'monthly'
 
         window.login = async function(e) {
             if (e) e.preventDefault();
@@ -86,6 +91,9 @@
             document.getElementById('login-section').style.display = 'none';
             document.getElementById('main-container').style.display = 'flex';
             
+            // 매출 필터 초기화
+            initSalesFilters();
+            
             // 섹션 초기화
             showSection('material');
             
@@ -122,8 +130,116 @@
             onSnapshot(q, (snapshot) => {
                 allDeliveries = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 renderDeliveries(allDeliveries);
+                renderSales(); // 납품 데이터가 업데이트되면 매출 데이터도 갱신
             }, (error) => console.error("Deliveries load error:", error));
         }
+
+        function initSalesFilters() {
+            const yearSelect = document.getElementById('sales-year');
+            const monthSelect = document.getElementById('sales-month');
+            if(!yearSelect || !monthSelect) return;
+
+            const currentYear = new Date().getFullYear();
+            yearSelect.innerHTML = '';
+            for(let y = currentYear; y >= currentYear - 5; y--) {
+                const opt = document.createElement('option');
+                opt.value = y; opt.textContent = `${y}년`;
+                yearSelect.appendChild(opt);
+            }
+            monthSelect.value = new Date().getMonth() + 1;
+        }
+
+        window.changeSalesMode = function(mode) {
+            salesViewMode = mode;
+            document.getElementById('sales-month').style.display = mode === 'monthly' ? 'inline-block' : 'none';
+            document.querySelectorAll('.btn-mode').forEach(b => b.classList.remove('active'));
+            event.target.classList.add('active');
+            renderSales();
+        };
+
+        window.updateSalesFilter = function() {
+            salesFilterYear = Number(document.getElementById('sales-year').value);
+            salesFilterMonth = Number(document.getElementById('sales-month').value);
+            renderSales();
+        };
+
+        window.renderSales = function(keyword = '') {
+            const listBody = document.getElementById('sales-list');
+            if(!listBody) return;
+            listBody.innerHTML = '';
+
+            let filtered = allDeliveries.filter(item => {
+                if(!item.createdAt) return false;
+                const d = item.createdAt.toDate();
+                const matchYear = d.getFullYear() === salesFilterYear;
+                const matchMonth = salesViewMode === 'monthly' ? (d.getMonth() + 1 === salesFilterMonth) : true;
+                const matchKeyword = !keyword || 
+                                    item.companyName.toLowerCase().includes(keyword.toLowerCase()) || 
+                                    item.materialName.toLowerCase().includes(keyword.toLowerCase());
+                return matchYear && matchMonth && matchKeyword;
+            });
+
+            let totalSalesPrice = 0;
+            let totalProfitAmount = 0;
+
+            filtered.forEach((item) => {
+                const isActive = activeSalesDetailId === item.id;
+                const date = item.createdAt ? new Date(item.createdAt.toDate()).toISOString().split('T')[0] : '-';
+                const qty = item.quantity || 0;
+                const cost = item.cost || 0;
+                const price = item.deliveryPrice || 0;
+                const unitProfit = price - cost;
+                const totalProfit = unitProfit * qty;
+                const totalAmount = price * qty;
+
+                totalSalesPrice += totalAmount;
+                totalProfitAmount += totalProfit;
+
+                const tr = document.createElement('tr');
+                tr.className = `material-row ${isActive ? 'active' : ''}`;
+                tr.onclick = () => { activeSalesDetailId = isActive ? null : item.id; renderSales(keyword); };
+                tr.innerHTML = `
+                    <td data-label="납품일">${date}</td>
+                    <td data-label="업체명"><strong>${item.companyName}</strong></td>
+                    <td data-label="품명">${item.materialName}</td>
+                    <td data-label="총액" class="text-right">₩${totalAmount.toLocaleString()}</td>
+                    <td data-label="총이익" class="text-right" style="color: #10b981; font-weight: 700;">₩${totalProfit.toLocaleString()}</td>
+                `;
+                listBody.appendChild(tr);
+
+                if (isActive) {
+                    const detailTr = document.createElement('tr');
+                    detailTr.className = 'detail-row';
+                    detailTr.innerHTML = `
+                        <td colspan="5">
+                            <div class="mobile-detail-box" style="border-left-color: #10b981;">
+                                <div class="info-grid">
+                                    <div class="info-item"><label>수량</label><span>${qty.toLocaleString()}</span></div>
+                                    <div class="info-item"><label>원가</label><span>₩${cost.toLocaleString()}</span></div>
+                                    <div class="info-item"><label>납품가</label><span>₩${price.toLocaleString()}</span></div>
+                                    <div class="info-item"><label>단가이익</label><span style="color: #10b981;">₩${unitProfit.toLocaleString()}</span></div>
+                                    <div class="info-item full"><label>전체 납품일시</label><span>${item.createdAt.toDate().toLocaleString()}</span></div>
+                                </div>
+                            </div>
+                        </td>
+                    `;
+                    listBody.appendChild(detailTr);
+                }
+            });
+
+            const summaryDiv = document.getElementById('sales-summary');
+            if(summaryDiv) {
+                summaryDiv.innerHTML = `
+                    <div style="display:flex; gap:10px; margin-bottom:15px; padding:12px; background:#f0fdf4; border-radius:10px; border:1px solid #bbf7d0;">
+                        <div style="flex:1;"><label style="font-size:0.75rem; color:#15803d; font-weight:700; display:block; margin-bottom:2px;">총 매출액</label><div style="font-size:1.2rem; font-weight:800; color:#166534;">₩${totalSalesPrice.toLocaleString()}</div></div>
+                        <div style="flex:1; border-left:1px solid #bbf7d0; padding-left:10px;"><label style="font-size:0.75rem; color:#15803d; font-weight:700; display:block; margin-bottom:2px;">총 순이익</label><div style="font-size:1.2rem; font-weight:800; color:#10b981;">₩${totalProfitAmount.toLocaleString()}</div></div>
+                    </div>
+                `;
+            }
+            lucide.createIcons();
+        };
+
+        window.searchSales = function(val) { renderSales(val); };
 
         window.renderCompanies = function(data) {
             const listBody = document.getElementById('company-list');
@@ -564,6 +680,9 @@
         button { padding: 0.5rem 1rem; border-radius: 6px; border: none; cursor: pointer; font-weight: 600; font-size: 0.85rem; display: flex; align-items: center; gap: 4px; }
         .btn-primary { background: var(--primary); color: #fff; }
         .btn-excel { background: #10b981; color: #fff; }
+        .btn-mode { background: #f1f5f9; color: #475569; padding: 0.4rem 0.8rem; border-radius: 6px; font-size: 0.8rem; }
+        .btn-mode.active { background: var(--primary); color: #fff; }
+        .filter-select { padding: 0.4rem; border: 1px solid var(--border); border-radius: 6px; font-size: 0.85rem; background: #fff; }
 
         /* 테이블 및 목록 스타일 */
         table { width: 100%; border-collapse: collapse; }
@@ -688,7 +807,31 @@
                     <tbody id="delivery-list"></tbody>
                 </table>
             </div>
-            <div id="sales-section" class="section"><h2>매출관리</h2><p>준비 중입니다.</p></div>
+            <div id="sales-section" class="section">
+                <div class="header-bar" style="margin-bottom:0.5rem;">
+                    <div class="search-container"><i data-lucide="search" class="search-icon"></i><input type="text" placeholder="업체명 또는 품명 검색..." oninput="searchSales(this.value)"></div>
+                    <div style="display:flex; gap:5px;">
+                        <button class="btn-mode active" onclick="changeSalesMode('monthly')">월별</button>
+                        <button class="btn-mode" onclick="changeSalesMode('yearly')">연도별</button>
+                    </div>
+                </div>
+                <div style="display:flex; align-items:center; gap:8px; margin-bottom:1rem; padding:0.5rem; background:#f8fafc; border-radius:8px;">
+                    <i data-lucide="calendar" style="width:16px; color:#64748b;"></i>
+                    <select id="sales-year" class="filter-select" onchange="updateSalesFilter()"></select>
+                    <select id="sales-month" class="filter-select" onchange="updateSalesFilter()">
+                        <option value="1">1월</option><option value="2">2월</option><option value="3">3월</option><option value="4">4월</option>
+                        <option value="5">5월</option><option value="6">6월</option><option value="7">7월</option><option value="8">8월</option>
+                        <option value="9">9월</option><option value="10">10월</option><option value="11">11월</option><option value="12">12월</option>
+                    </select>
+                </div>
+                <div id="sales-summary"></div>
+                <table>
+                    <thead>
+                        <tr><th>납품일</th><th>업체명</th><th>품명</th><th class="text-right">매출액</th><th class="text-right">순이익</th></tr>
+                    </thead>
+                    <tbody id="sales-list"></tbody>
+                </table>
+            </div>
         </main>
     </div>
     <div id="delivery-modal" class="modal-overlay">
