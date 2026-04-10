@@ -27,6 +27,10 @@
         let allMaterials = [];
         let activeDetailId = null;
 
+        let allCompanies = [];
+        let activeCompanyDetailId = null;
+        let currentCompanyEditId = null;
+
         window.login = async function() {
             const idInput = document.getElementById('login-id').value.trim();
             const pwInput = document.getElementById('login-pw').value.trim();
@@ -52,6 +56,7 @@
             document.getElementById('main-container').style.display = 'flex';
             showSection('material');
             loadMaterials();
+            loadCompanies();
             lucide.createIcons();
         }
 
@@ -62,6 +67,98 @@
                 renderMaterials(allMaterials);
             });
         }
+
+        function loadCompanies() {
+            const q = query(collection(db, "companies"), orderBy("updatedAt", "desc"));
+            onSnapshot(q, (snapshot) => {
+                allCompanies = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                renderCompanies(allCompanies);
+            });
+        }
+
+        window.renderCompanies = function(data) {
+            const listBody = document.getElementById('company-list');
+            listBody.innerHTML = '';
+            data.forEach((item) => {
+                const isActive = activeCompanyDetailId === item.id;
+                const tr = document.createElement('tr');
+                tr.className = `material-row ${isActive ? 'active' : ''}`;
+                tr.onclick = () => toggleCompanyDetail(item.id);
+                tr.innerHTML = `
+                    <td data-label="업체명"><strong>${item.name}</strong></td>
+                    <td data-label="연락처">${item.contact || '-'}</td>
+                    <td data-label="메모" class="text-right">${item.memo ? (item.memo.length > 20 ? item.memo.substring(0, 20) + '...' : item.memo) : '-'}</td>
+                `;
+                listBody.appendChild(tr);
+
+                if (isActive) {
+                    const detailTr = document.createElement('tr');
+                    detailTr.className = 'detail-row';
+                    detailTr.innerHTML = `
+                        <td colspan="3">
+                            <div class="mobile-detail-box">
+                                <div class="info-grid">
+                                    <div class="info-item"><label>업체명</label><span>${item.name}</span></div>
+                                    <div class="info-item"><label>연락처</label><span>${item.contact || '-'}</span></div>
+                                    <div class="info-item full"><label>메모</label><span>${item.memo || '-'}</span></div>
+                                </div>
+                                <div class="action-footer">
+                                    <button onclick="editCompany('${item.id}'); event.stopPropagation();" class="btn-edit"><i data-lucide="edit-2"></i> 수정</button>
+                                    <button onclick="deleteCompany('${item.id}'); event.stopPropagation();" class="btn-del"><i data-lucide="trash-2"></i> 삭제</button>
+                                </div>
+                            </div>
+                        </td>
+                    `;
+                    listBody.appendChild(detailTr);
+                }
+            });
+            lucide.createIcons();
+        };
+
+        window.toggleCompanyDetail = function(id) {
+            activeCompanyDetailId = activeCompanyDetailId === id ? null : id;
+            renderCompanies(allCompanies);
+        };
+
+        window.searchCompanies = function(keyword) {
+            const filtered = allCompanies.filter(item => 
+                item.name.toLowerCase().includes(keyword.toLowerCase()) ||
+                (item.contact && item.contact.includes(keyword))
+            );
+            renderCompanies(filtered);
+        };
+
+        window.saveCompany = async function() {
+            const data = {
+                name: document.getElementById('com-name').value,
+                contact: document.getElementById('com-contact').value,
+                memo: document.getElementById('com-memo').value,
+                updatedAt: serverTimestamp()
+            };
+            if(!data.name) return alert('업체명은 필수입니다.');
+            try {
+                if (currentCompanyEditId) await updateDoc(doc(db, "companies", currentCompanyEditId), data);
+                else { data.createdAt = serverTimestamp(); await addDoc(collection(db, "companies"), data); }
+                closeCompanyModal();
+            } catch (e) { alert('오류: ' + e.message); }
+        };
+
+        window.editCompany = async function(id) {
+            currentCompanyEditId = id;
+            const docSnap = await getDoc(doc(db, "companies", id));
+            if (docSnap.exists()) {
+                const d = docSnap.data();
+                document.getElementById('com-name').value = d.name;
+                document.getElementById('com-contact').value = d.contact;
+                document.getElementById('com-memo').value = d.memo;
+                document.getElementById('company-modal-title').innerText = '업체 수정';
+                openCompanyModal();
+            }
+        };
+
+        window.deleteCompany = async function(id) { if (confirm('삭제하시겠습니까?')) await deleteDoc(doc(db, "companies", id)); };
+        window.openCompanyModal = () => document.getElementById('company-modal').style.display = 'flex';
+        window.closeCompanyModal = () => { document.getElementById('company-modal').style.display = 'none'; document.getElementById('company-form').reset(); currentCompanyEditId = null; document.getElementById('company-modal-title').innerText = '새 업체 등록'; };
 
         window.renderMaterials = function(data) {
             const listBody = document.getElementById('material-list');
@@ -297,9 +394,42 @@
                     <button onclick="saveProfile()" class="btn-primary">변경 내용 저장</button>
                 </div>
             </div>
-            <div id="company-section" class="section"><h2>업체관리</h2><p>준비 중입니다.</p></div>
+            <div id="company-section" class="section">
+                <div class="header-bar">
+                    <div class="search-container"><i data-lucide="search" class="search-icon"></i><input type="text" placeholder="업체명 또는 연락처 검색..." oninput="searchCompanies(this.value)"></div>
+                    <div class="btn-group">
+                        <button onclick="openCompanyModal()" class="btn-primary"><i data-lucide="plus"></i> 추가</button>
+                    </div>
+                </div>
+                <table>
+                    <thead>
+                        <tr><th>업체명</th><th>연락처</th><th class="text-right">메모</th></tr>
+                    </thead>
+                    <tbody id="company-list"></tbody>
+                </table>
+            </div>
             <div id="sales-section" class="section"><h2>매출관리</h2><p>준비 중입니다.</p></div>
         </main>
+    </div>
+    <div id="company-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h3 id="company-modal-title" style="margin-top:0; font-size:1.1rem;">새 업체 등록</h3>
+            <form id="company-form">
+                <label style="font-size:0.8rem; font-weight:700;">업체명 *</label>
+                <input type="text" id="com-name" style="width:100%; padding:0.6rem; margin:0.3rem 0 0.7rem; border:1px solid var(--border); border-radius:6px;">
+                
+                <label style="font-size:0.8rem; font-weight:700;">연락처</label>
+                <input type="text" id="com-contact" placeholder="010-0000-0000" style="width:100%; padding:0.6rem; margin:0.3rem 0 0.7rem; border:1px solid var(--border); border-radius:6px;">
+                
+                <label style="font-size:0.8rem; font-weight:700;">메모</label>
+                <textarea id="com-memo" rows="3" style="width:100%; padding:0.6rem; margin:0.3rem 0 0.7rem; border:1px solid var(--border); border-radius:6px; font-family:inherit;"></textarea>
+                
+                <div style="display:flex; justify-content: flex-end; gap:8px; margin-top:0.5rem;">
+                    <button type="button" style="background:#f1f5f9; color:#475569;" onclick="closeCompanyModal()">취소</button>
+                    <button type="button" class="btn-primary" onclick="saveCompany()">저장하기</button>
+                </div>
+            </form>
+        </div>
     </div>
     <div id="mat-modal" class="modal-overlay">
         <div class="modal-content">
