@@ -40,30 +40,53 @@
             const idInput = document.getElementById('login-id').value.trim();
             const pwInput = document.getElementById('login-pw').value.trim();
             if(!idInput || !pwInput) return alert('아이디와 비밀번호를 입력해주세요.');
+            
+            const btn = event.target;
+            const originalText = btn.innerText;
+            btn.innerText = "접속 중...";
+            btn.disabled = true;
+
             try {
                 await enableNetwork(db);
                 const adminRef = doc(db, "users", "admin");
                 const adminDoc = await getDoc(adminRef);
+                
                 if (adminDoc.exists()) {
                     const data = adminDoc.data();
-                    if (data.id === idInput && data.pw === pwInput) enterSystem();
-                    else alert('아이디 또는 비밀번호가 틀립니다.');
+                    if (data.id === idInput && data.pw === pwInput) {
+                        enterSystem();
+                    } else {
+                        alert('아이디 또는 비밀번호가 틀립니다.');
+                    }
                 } else if (idInput === 'batman' && pwInput === 'forever') {
                     await setDoc(adminRef, { id: 'batman', pw: 'forever' });
                     alert('관리자 계정이 생성되었습니다.');
                     enterSystem();
-                } else alert('등록된 계정이 없습니다.');
-            } catch (e) { alert('접속 오류: ' + e.message); }
+                } else {
+                    alert('등록된 계정이 없습니다.');
+                }
+            } catch (e) { 
+                alert('접속 오류: ' + e.message); 
+            } finally {
+                btn.innerText = originalText;
+                btn.disabled = false;
+            }
         };
 
         function enterSystem() {
+            // 화면 전환을 가장 먼저 수행
             document.getElementById('login-section').style.display = 'none';
             document.getElementById('main-container').style.display = 'flex';
+            
+            // 섹션 초기화
             showSection('material');
-            loadMaterials();
-            loadCompanies();
-            loadDeliveries();
-            lucide.createIcons();
+            
+            // 데이터 로딩 (에러가 발생해도 화면은 유지되도록 개별 시도)
+            try { loadMaterials(); } catch(e) { console.error(e); }
+            try { loadCompanies(); } catch(e) { console.error(e); }
+            try { if(typeof loadDeliveries === 'function') loadDeliveries(); } catch(e) { console.error(e); }
+            
+            if(window.lucide) lucide.createIcons();
         }
 
         function loadMaterials() {
