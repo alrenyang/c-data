@@ -117,6 +117,7 @@
                                     <div class="info-item full"><label>납품일시</label><span>${item.createdAt ? new Date(item.createdAt.toDate()).toLocaleString() : '-'}</span></div>
                                 </div>
                                 <div class="action-footer">
+                                    <button onclick="editDelivery('${item.id}'); event.stopPropagation();" class="btn-edit"><i data-lucide="edit-2"></i> 수정</button>
                                     <button onclick="deleteDelivery('${item.id}', '${item.materialId}', ${item.quantity}); event.stopPropagation();" class="btn-del"><i data-lucide="trash-2"></i> 삭제(회수)</button>
                                 </div>
                             </div>
@@ -128,72 +129,90 @@
             lucide.createIcons();
         };
 
-        window.toggleDeliveryDetail = function(id) {
-            activeDeliveryDetailId = activeDeliveryDetailId === id ? null : id;
-            renderDeliveries(allDeliveries);
-        };
+        let currentDeliveryEditId = null;
 
-        window.searchDeliveries = function(keyword) {
-            const filtered = allDeliveries.filter(item => 
-                item.companyName.toLowerCase().includes(keyword.toLowerCase()) ||
-                item.materialName.toLowerCase().includes(keyword.toLowerCase())
-            );
-            renderDeliveries(filtered);
-        };
-
-        window.openDeliveryModal = () => {
-            const comSelect = document.getElementById('del-company');
-            const matSelect = document.getElementById('del-material');
-            comSelect.innerHTML = '<option value="">업체 선택</option>';
-            matSelect.innerHTML = '<option value="">품명 선택</option>';
-            allCompanies.forEach(c => comSelect.innerHTML += `<option value="${c.name}">${c.name}</option>`);
-            allMaterials.forEach(m => matSelect.innerHTML += `<option value="${m.id}" data-name="${m.name}" data-cost="${m.cost}" data-stock="${m.quantity}">${m.name} (재고: ${m.quantity})</option>`);
-            document.getElementById('delivery-modal').style.display = 'flex';
-        };
-
-        window.onMaterialChange = function(select) {
-            const opt = select.options[select.selectedIndex];
-            if(opt.value) {
-                document.getElementById('del-cost').value = Number(opt.getAttribute('data-cost')).toLocaleString();
-                document.getElementById('del-price').value = Number(opt.getAttribute('data-cost')).toLocaleString();
+        window.editDelivery = async function(id) {
+            currentDeliveryEditId = id;
+            const docSnap = await getDoc(doc(db, "deliveries", id));
+            if (docSnap.exists()) {
+                const d = docSnap.data();
+                openDeliveryModal();
+                // openDeliveryModal이 목록을 로드하므로 약간의 지연 후 값 세팅
+                setTimeout(() => {
+                    document.getElementById('del-company').value = d.companyName;
+                    document.getElementById('del-material').value = d.materialId;
+                    document.getElementById('del-cost').value = (d.cost || 0).toLocaleString();
+                    document.getElementById('del-price').value = (d.deliveryPrice || 0).toLocaleString();
+                    document.getElementById('del-quantity').value = (d.quantity || 0).toLocaleString();
+                    document.getElementById('delivery-modal-title').innerText = '납품 수정';
+                }, 100);
             }
         };
 
         window.saveDelivery = async function() {
             const matSelect = document.getElementById('del-material');
             const selectedMat = matSelect.options[matSelect.selectedIndex];
-            const data = {
+            if(!selectedMat.value) return alert('물품을 선택해주세요.');
+
+            const newData = {
                 companyName: document.getElementById('del-company').value,
                 materialId: matSelect.value,
                 materialName: selectedMat.getAttribute('data-name'),
                 cost: Number(document.getElementById('del-cost').value.replace(/,/g, '')),
                 deliveryPrice: Number(document.getElementById('del-price').value.replace(/,/g, '')),
                 quantity: Number(document.getElementById('del-quantity').value.replace(/,/g, '')),
-                updatedAt: serverTimestamp(),
-                createdAt: serverTimestamp()
+                updatedAt: serverTimestamp()
             };
-            if(!data.companyName || !data.materialId || !data.quantity) return alert('모든 항목을 입력해주세요.');
-            const currentStock = Number(selectedMat.getAttribute('data-stock'));
-            if(currentStock < data.quantity) return alert(`재고가 부족합니다. (현재 재고: ${currentStock})`);
+
+            if(!newData.companyName || !newData.materialId || !newData.quantity) return alert('모든 항목을 입력해주세요.');
+
             try {
-                await addDoc(collection(db, "deliveries"), data);
-                await updateDoc(doc(db, "materials", data.materialId), { quantity: currentStock - data.quantity, updatedAt: serverTimestamp() });
+                if (currentDeliveryEditId) {
+                    const oldDoc = await getDoc(doc(db, "deliveries", currentDeliveryEditId));
+                    const oldData = oldDoc.data();
+                    
+                    // 1. 기존 자재 재고 원복
+                    const oldMatRef = doc(db, "materials", oldData.materialId);
+                    const oldMatSnap = await getDoc(oldMatRef);
+                    let baseStock = (oldMatSnap.data().quantity || 0) + oldData.quantity;
+
+                    // 2. 새 자재 재고 확인 (같은 품목이면 baseStock 기준, 다른 품목이면 실제 재고 기준)
+                    let targetMatRef = oldMatRef;
+                    let targetStock = baseStock;
+                    
+                    if(oldData.materialId !== newData.materialId) {
+                        targetMatRef = doc(db, "materials", newData.materialId);
+                        const targetMatSnap = await getDoc(targetMatRef);
+                        targetStock = targetMatSnap.data().quantity || 0;
+                    }
+
+                    if(targetStock < newData.quantity) return alert(`재고가 부족합니다. (현재 가능 재고: ${targetStock})`);
+
+                    // 3. 재고 업데이트 및 기록 수정
+                    if(oldData.materialId !== newData.materialId) {
+                        await updateDoc(oldMatRef, { quantity: baseStock, updatedAt: serverTimestamp() });
+                        await updateDoc(targetMatRef, { quantity: targetStock - newData.quantity, updatedAt: serverTimestamp() });
+                    } else {
+                        await updateDoc(oldMatRef, { quantity: baseStock - newData.quantity, updatedAt: serverTimestamp() });
+                    }
+                    await updateDoc(doc(db, "deliveries", currentDeliveryEditId), newData);
+                } else {
+                    const currentStock = Number(selectedMat.getAttribute('data-stock'));
+                    if(currentStock < newData.quantity) return alert(`재고가 부족합니다. (현재 재고: ${currentStock})`);
+                    newData.createdAt = serverTimestamp();
+                    await addDoc(collection(db, "deliveries"), newData);
+                    await updateDoc(doc(db, "materials", newData.materialId), { quantity: currentStock - newData.quantity, updatedAt: serverTimestamp() });
+                }
                 closeDeliveryModal();
             } catch (e) { alert('오류: ' + e.message); }
         };
 
-        window.deleteDelivery = async function(id, matId, quantity) {
-            if (confirm('삭제 시 자재 재고가 다시 증가합니다. 진행하시겠습니까?')) {
-                try {
-                    const matRef = doc(db, "materials", matId);
-                    const matSnap = await getDoc(matRef);
-                    if(matSnap.exists()) await updateDoc(matRef, { quantity: (matSnap.data().quantity || 0) + quantity, updatedAt: serverTimestamp() });
-                    await deleteDoc(doc(db, "deliveries", id));
-                } catch (e) { alert('오류: ' + e.message); }
-            }
+        window.closeDeliveryModal = () => { 
+            document.getElementById('delivery-modal').style.display = 'none'; 
+            document.getElementById('delivery-form').reset(); 
+            currentDeliveryEditId = null;
+            document.getElementById('delivery-modal-title').innerText = '새 납품 등록';
         };
-
-        window.closeDeliveryModal = () => { document.getElementById('delivery-modal').style.display = 'none'; document.getElementById('delivery-form').reset(); };
 
         window.renderCompanies = function(data) {
             const listBody = document.getElementById('company-list');
@@ -211,6 +230,34 @@
                 listBody.appendChild(tr);
 
                 if (isActive) {
+                    // 해당 업체의 납품 내역 필터링
+                    const companyDeliveries = allDeliveries.filter(d => d.companyName === item.name);
+                    let deliveryHistoryHtml = '';
+                    
+                    if (companyDeliveries.length > 0) {
+                        deliveryHistoryHtml = `
+                            <div style="margin-top: 12px; border-top: 2px solid #f1f5f9; padding-top: 10px;">
+                                <label style="display: block; font-size: 0.75rem; color: var(--primary); font-weight: 800; margin-bottom: 6px;">📦 최근 납품 내역</label>
+                                <div style="max-height: 150px; overflow-y: auto;">
+                                    <table style="font-size: 0.8rem; background: #f8fafc; border-radius: 6px; width: 100%;">
+                                        <thead style="background: #edf2f7;">
+                                            <tr><th style="padding:4px 8px;">품명</th><th style="padding:4px 8px;" class="text-right">수량</th><th style="padding:4px 8px;" class="text-right">단가</th></tr>
+                                        </thead>
+                                        <tbody>
+                                            ${companyDeliveries.map(d => `
+                                                <tr>
+                                                    <td style="padding:4px 8px; border-bottom:1px solid #e2e8f0;">${d.materialName}</td>
+                                                    <td style="padding:4px 8px; border-bottom:1px solid #e2e8f0;" class="text-right">${d.quantity.toLocaleString()}</td>
+                                                    <td style="padding:4px 8px; border-bottom:1px solid #e2e8f0;" class="text-right">₩${d.deliveryPrice.toLocaleString()}</td>
+                                                </tr>
+                                            `).join('')}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        `;
+                    }
+
                     const detailTr = document.createElement('tr');
                     detailTr.className = 'detail-row';
                     detailTr.innerHTML = `
@@ -221,7 +268,8 @@
                                     <div class="info-item"><label>연락처</label><span>${item.contact || '-'}</span></div>
                                     <div class="info-item full"><label>메모</label><span>${item.memo || '-'}</span></div>
                                 </div>
-                                <div class="action-footer">
+                                ${deliveryHistoryHtml}
+                                <div class="action-footer" style="margin-top:15px;">
                                     <button onclick="editCompany('${item.id}'); event.stopPropagation();" class="btn-edit"><i data-lucide="edit-2"></i> 수정</button>
                                     <button onclick="deleteCompany('${item.id}'); event.stopPropagation();" class="btn-del"><i data-lucide="trash-2"></i> 삭제</button>
                                 </div>
@@ -547,7 +595,7 @@
     </div>
     <div id="delivery-modal" class="modal-overlay">
         <div class="modal-content">
-            <h3 style="margin-top:0; font-size:1.1rem;">새 납품 등록</h3>
+            <h3 id="delivery-modal-title" style="margin-top:0; font-size:1.1rem;">새 납품 등록</h3>
             <form id="delivery-form">
                 <label style="font-size:0.8rem; font-weight:700;">업체명 *</label>
                 <select id="del-company" style="width:100%; padding:0.6rem; margin:0.3rem 0 0.7rem; border:1px solid var(--border); border-radius:6px; background:#fff;"></select>
