@@ -36,12 +36,13 @@
         let activeDeliveryDetailId = null;
         let currentDeliveryEditId = null;
 
-        window.login = async function() {
+        window.login = async function(e) {
+            if (e) e.preventDefault();
             const idInput = document.getElementById('login-id').value.trim();
             const pwInput = document.getElementById('login-pw').value.trim();
             if(!idInput || !pwInput) return alert('아이디와 비밀번호를 입력해주세요.');
             
-            const btn = event.target;
+            const btn = document.querySelector('#login-section .btn-primary');
             const originalText = btn.innerText;
             btn.innerText = "접속 중...";
             btn.disabled = true;
@@ -67,11 +68,14 @@
                 } else {
                     alert('등록된 계정이 없습니다.');
                 }
-            } catch (e) { 
-                alert('접속 오류: ' + e.message); 
+            } catch (err) { 
+                console.error("Login Error:", err);
+                alert('접속 오류: ' + err.message); 
             } finally {
-                btn.innerText = originalText;
-                btn.disabled = false;
+                if (btn) {
+                    btn.innerText = originalText;
+                    btn.disabled = false;
+                }
             }
         };
 
@@ -745,7 +749,7 @@
             <div class="logo" style="justify-content: center; margin-bottom: 1.2rem;"><i data-lucide="package"></i> C-DATA</div>
             <input type="text" id="login-id" placeholder="아이디">
             <input type="password" id="login-pw" placeholder="비밀번호">
-            <button onclick="login()" class="btn-primary" style="width: 100%; justify-content: center;">접속하기</button>
+            <button onclick="login(event)" class="btn-primary" style="width: 100%; justify-content: center;">접속하기</button>
         </div>
     </div>
     <div id="main-container">
