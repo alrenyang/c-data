@@ -34,6 +34,7 @@
 
         let allDeliveries = [];
         let activeDeliveryDetailId = null;
+        let currentDeliveryEditId = null;
 
         window.login = async function() {
             const idInput = document.getElementById('login-id').value.trim();
@@ -99,10 +100,12 @@
             data.forEach((item) => {
                 const isActive = activeDeliveryDetailId === item.id;
                 const total = (item.deliveryPrice || 0) * (item.quantity || 0);
+                const date = item.createdAt ? new Date(item.createdAt.toDate()).toISOString().split('T')[0] : '-';
                 const tr = document.createElement('tr');
                 tr.className = `material-row ${isActive ? 'active' : ''}`;
                 tr.onclick = () => toggleDeliveryDetail(item.id);
                 tr.innerHTML = `
+                    <td data-label="납품일">${date}</td>
                     <td data-label="업체명"><strong>${item.companyName}</strong></td>
                     <td data-label="품명">${item.materialName}</td>
                     <td data-label="수량" class="text-right">${(item.quantity || 0).toLocaleString()}</td>
@@ -114,7 +117,7 @@
                     const detailTr = document.createElement('tr');
                     detailTr.className = 'detail-row';
                     detailTr.innerHTML = `
-                        <td colspan="4">
+                        <td colspan="5">
                             <div class="mobile-detail-box">
                                 <div class="info-grid">
                                     <div class="info-item"><label>원가</label><span>₩${(item.cost || 0).toLocaleString()}</span></div>
@@ -122,8 +125,8 @@
                                     <div class="info-item full"><label>납품일시</label><span>${item.createdAt ? new Date(item.createdAt.toDate()).toLocaleString() : '-'}</span></div>
                                 </div>
                                 <div class="action-footer">
-                                    <button onclick="editDelivery('${item.id}'); event.stopPropagation();" class="btn-edit"><i data-lucide="edit-2"></i> 수정</button>
-                                    <button onclick="deleteDelivery('${item.id}', '${item.materialId}', ${item.quantity}); event.stopPropagation();" class="btn-del"><i data-lucide="trash-2"></i> 삭제(회수)</button>
+                                    <button onclick="window.editDelivery('${item.id}'); event.stopPropagation();" class="btn-edit"><i data-lucide="edit-2"></i> 수정</button>
+                                    <button onclick="window.deleteDelivery('${item.id}', '${item.materialId}', ${item.quantity}); event.stopPropagation();" class="btn-del"><i data-lucide="trash-2"></i> 삭제(회수)</button>
                                 </div>
                             </div>
                         </td>
@@ -454,6 +457,188 @@
             const target = Array.from(document.querySelectorAll('.menu-item')).find(m => m.onclick.toString().includes(id));
             if(target) target.classList.add('active');
         };
+
+        // 납품 관리 함수 추가
+        window.loadDeliveries = function() {
+            const q = query(collection(db, "deliveries"), orderBy("updatedAt", "desc"));
+            onSnapshot(q, (snapshot) => {
+                allDeliveries = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                renderDeliveries(allDeliveries);
+            }, (error) => console.error("Deliveries load error:", error));
+        };
+
+        window.renderDeliveries = function(data) {
+            const listBody = document.getElementById('delivery-list');
+            listBody.innerHTML = '';
+            data.forEach((item) => {
+                const isActive = activeDeliveryDetailId === item.id;
+                const total = (item.deliveryPrice || 0) * (item.quantity || 0);
+                const date = item.createdAt ? new Date(item.createdAt.toDate()).toISOString().split('T')[0] : '-';
+                const tr = document.createElement('tr');
+                tr.className = `material-row ${isActive ? 'active' : ''}`;
+                tr.onclick = () => toggleDeliveryDetail(item.id);
+                tr.innerHTML = `
+                    <td data-label="납품일">${date}</td>
+                    <td data-label="업체명"><strong>${item.companyName}</strong></td>
+                    <td data-label="품명">${item.materialName}</td>
+                    <td data-label="수량" class="text-right">${(item.quantity || 0).toLocaleString()}</td>
+                    <td data-label="합계" class="text-right" style="color: var(--primary); font-weight: 700;">₩${total.toLocaleString()}</td>
+                `;
+                listBody.appendChild(tr);
+
+                if (isActive) {
+                    const detailTr = document.createElement('tr');
+                    detailTr.className = 'detail-row';
+                    detailTr.innerHTML = `
+                        <td colspan="5">
+                            <div class="mobile-detail-box">
+                                <div class="info-grid">
+                                    <div class="info-item"><label>원가</label><span>₩${(item.cost || 0).toLocaleString()}</span></div>
+                                    <div class="info-item"><label>납품가</label><span>₩${(item.deliveryPrice || 0).toLocaleString()}</span></div>
+                                    <div class="info-item full"><label>납품일시</label><span>${item.createdAt ? new Date(item.createdAt.toDate()).toLocaleString() : '-'}</span></div>
+                                </div>
+                                <div class="action-footer">
+                                    <button onclick="window.editDelivery('${item.id}'); event.stopPropagation();" class="btn-edit"><i data-lucide="edit-2"></i> 수정</button>
+                                    <button onclick="window.deleteDelivery('${item.id}', '${item.materialId}', ${item.quantity}); event.stopPropagation();" class="btn-del"><i data-lucide="trash-2"></i> 삭제(회수)</button>
+                                </div>
+                            </div>
+                        </td>
+                    `;
+                    listBody.appendChild(detailTr);
+                }
+            });
+            lucide.createIcons();
+        };
+
+        window.toggleDeliveryDetail = function(id) {
+            activeDeliveryDetailId = (activeDeliveryDetailId === id) ? null : id;
+            renderDeliveries(allDeliveries);
+        };
+
+        window.openDeliveryModal = () => {
+            const comSelect = document.getElementById('del-company');
+            const matSelect = document.getElementById('del-material');
+            if(!comSelect || !matSelect) return;
+            
+            comSelect.innerHTML = '<option value="">업체 선택</option>';
+            matSelect.innerHTML = '<option value="">품명 선택</option>';
+            
+            allCompanies.forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c.name; opt.textContent = c.name;
+                comSelect.appendChild(opt);
+            });
+            
+            allMaterials.forEach(m => {
+                const opt = document.createElement('option');
+                opt.value = m.id;
+                opt.textContent = `${m.name} (재고: ${m.quantity || 0})`;
+                opt.setAttribute('data-name', m.name);
+                opt.setAttribute('data-cost', m.cost || 0);
+                opt.setAttribute('data-stock', m.quantity || 0);
+                matSelect.appendChild(opt);
+            });
+            
+            document.getElementById('delivery-modal').style.display = 'flex';
+        };
+
+        window.onMaterialChange = function(select) {
+            const opt = select.options[select.selectedIndex];
+            if(opt && opt.value) {
+                document.getElementById('del-cost').value = Number(opt.getAttribute('data-cost')).toLocaleString();
+                document.getElementById('del-price').value = Number(opt.getAttribute('data-cost')).toLocaleString();
+            }
+        };
+
+        window.saveDelivery = async function() {
+            const matSelect = document.getElementById('del-material');
+            const selectedMat = matSelect.options[matSelect.selectedIndex];
+            if(!selectedMat || !selectedMat.value) return alert('물품을 선택해주세요.');
+
+            const newData = {
+                companyName: document.getElementById('del-company').value,
+                materialId: matSelect.value,
+                materialName: selectedMat.getAttribute('data-name'),
+                cost: Number(document.getElementById('del-cost').value.replace(/,/g, '')),
+                deliveryPrice: Number(document.getElementById('del-price').value.replace(/,/g, '')),
+                quantity: Number(document.getElementById('del-quantity').value.replace(/,/g, '')),
+                updatedAt: serverTimestamp()
+            };
+
+            if(!newData.companyName || !newData.materialId || !newData.quantity) return alert('모든 항목을 입력해주세요.');
+
+            try {
+                if (currentDeliveryEditId) {
+                    const oldDoc = await getDoc(doc(db, "deliveries", currentDeliveryEditId));
+                    const oldData = oldDoc.data();
+                    const oldMatRef = doc(db, "materials", oldData.materialId);
+                    const oldMatSnap = await getDoc(oldMatRef);
+                    let baseStock = (oldMatSnap.data().quantity || 0) + oldData.quantity;
+
+                    let targetMatRef = oldMatRef;
+                    let targetStock = baseStock;
+                    
+                    if(oldData.materialId !== newData.materialId) {
+                        targetMatRef = doc(db, "materials", newData.materialId);
+                        const targetMatSnap = await getDoc(targetMatRef);
+                        targetStock = targetMatSnap.data().quantity || 0;
+                    }
+
+                    if(targetStock < newData.quantity) return alert(`재고가 부족합니다. (현재 가능 재고: ${targetStock})`);
+
+                    if(oldData.materialId !== newData.materialId) {
+                        await updateDoc(oldMatRef, { quantity: baseStock, updatedAt: serverTimestamp() });
+                        await updateDoc(targetMatRef, { quantity: targetStock - newData.quantity, updatedAt: serverTimestamp() });
+                    } else {
+                        await updateDoc(oldMatRef, { quantity: baseStock - newData.quantity, updatedAt: serverTimestamp() });
+                    }
+                    await updateDoc(doc(db, "deliveries", currentDeliveryEditId), newData);
+                } else {
+                    const currentStock = Number(selectedMat.getAttribute('data-stock'));
+                    if(currentStock < newData.quantity) return alert(`재고가 부족합니다. (현재 재고: ${currentStock})`);
+                    newData.createdAt = serverTimestamp();
+                    await addDoc(collection(db, "deliveries"), newData);
+                    await updateDoc(doc(db, "materials", newData.materialId), { quantity: currentStock - newData.quantity, updatedAt: serverTimestamp() });
+                }
+                closeDeliveryModal();
+            } catch (e) { alert('오류: ' + e.message); }
+        };
+
+        window.editDelivery = async function(id) {
+            currentDeliveryEditId = id;
+            const docSnap = await getDoc(doc(db, "deliveries", id));
+            if (docSnap.exists()) {
+                const d = docSnap.data();
+                openDeliveryModal();
+                setTimeout(() => {
+                    document.getElementById('del-company').value = d.companyName;
+                    document.getElementById('del-material').value = d.materialId;
+                    document.getElementById('del-cost').value = (d.cost || 0).toLocaleString();
+                    document.getElementById('del-price').value = (d.deliveryPrice || 0).toLocaleString();
+                    document.getElementById('del-quantity').value = (d.quantity || 0).toLocaleString();
+                    document.getElementById('delivery-modal-title').innerText = '납품 수정';
+                }, 150);
+            }
+        };
+
+        window.deleteDelivery = async function(id, matId, quantity) {
+            if (confirm('삭제 시 자재 재고가 다시 증가합니다. 진행하시겠습니까?')) {
+                try {
+                    const matRef = doc(db, "materials", matId);
+                    const matSnap = await getDoc(matRef);
+                    if(matSnap.exists()) await updateDoc(matRef, { quantity: (matSnap.data().quantity || 0) + quantity, updatedAt: serverTimestamp() });
+                    await deleteDoc(doc(db, "deliveries", id));
+                } catch (e) { alert('오류: ' + e.message); }
+            }
+        };
+
+        window.closeDeliveryModal = () => { 
+            document.getElementById('delivery-modal').style.display = 'none'; 
+            document.getElementById('delivery-form').reset(); 
+            currentDeliveryEditId = null;
+            document.getElementById('delivery-modal-title').innerText = '새 납품 등록';
+        };
+
         window.logout = () => { if(confirm('로그아웃?')) location.reload(); };
         window.onload = () => lucide.createIcons();
     </script>
@@ -595,7 +780,7 @@
                 </div>
                 <table>
                     <thead>
-                        <tr><th>업체명</th><th>품명</th><th class="text-right">납품수량</th><th class="text-right">합계금액</th></tr>
+                        <tr><th>납품일</th><th>업체명</th><th>품명</th><th class="text-right">수량</th><th class="text-right">합계금액</th></tr>
                     </thead>
                     <tbody id="delivery-list"></tbody>
                 </table>
