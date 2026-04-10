@@ -31,6 +31,9 @@
         let activeCompanyDetailId = null;
         let currentCompanyEditId = null;
 
+        let allDeliveries = [];
+        let activeDeliveryDetailId = null;
+
         window.login = async function() {
             const idInput = document.getElementById('login-id').value.trim();
             const pwInput = document.getElementById('login-pw').value.trim();
@@ -57,6 +60,7 @@
             showSection('material');
             loadMaterials();
             loadCompanies();
+            loadDeliveries();
             lucide.createIcons();
         }
 
@@ -75,6 +79,121 @@
                 renderCompanies(allCompanies);
             });
         }
+
+        function loadDeliveries() {
+            const q = query(collection(db, "deliveries"), orderBy("updatedAt", "desc"));
+            onSnapshot(q, (snapshot) => {
+                allDeliveries = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                renderDeliveries(allDeliveries);
+            });
+        }
+
+        window.renderDeliveries = function(data) {
+            const listBody = document.getElementById('delivery-list');
+            listBody.innerHTML = '';
+            data.forEach((item) => {
+                const isActive = activeDeliveryDetailId === item.id;
+                const total = (item.deliveryPrice || 0) * (item.quantity || 0);
+                const tr = document.createElement('tr');
+                tr.className = `material-row ${isActive ? 'active' : ''}`;
+                tr.onclick = () => toggleDeliveryDetail(item.id);
+                tr.innerHTML = `
+                    <td data-label="업체명"><strong>${item.companyName}</strong></td>
+                    <td data-label="품명">${item.materialName}</td>
+                    <td data-label="수량" class="text-right">${(item.quantity || 0).toLocaleString()}</td>
+                    <td data-label="합계" class="text-right" style="color: var(--primary); font-weight: 700;">₩${total.toLocaleString()}</td>
+                `;
+                listBody.appendChild(tr);
+
+                if (isActive) {
+                    const detailTr = document.createElement('tr');
+                    detailTr.className = 'detail-row';
+                    detailTr.innerHTML = `
+                        <td colspan="4">
+                            <div class="mobile-detail-box">
+                                <div class="info-grid">
+                                    <div class="info-item"><label>원가</label><span>₩${(item.cost || 0).toLocaleString()}</span></div>
+                                    <div class="info-item"><label>납품가</label><span>₩${(item.deliveryPrice || 0).toLocaleString()}</span></div>
+                                    <div class="info-item full"><label>납품일시</label><span>${item.createdAt ? new Date(item.createdAt.toDate()).toLocaleString() : '-'}</span></div>
+                                </div>
+                                <div class="action-footer">
+                                    <button onclick="deleteDelivery('${item.id}', '${item.materialId}', ${item.quantity}); event.stopPropagation();" class="btn-del"><i data-lucide="trash-2"></i> 삭제(회수)</button>
+                                </div>
+                            </div>
+                        </td>
+                    `;
+                    listBody.appendChild(detailTr);
+                }
+            });
+            lucide.createIcons();
+        };
+
+        window.toggleDeliveryDetail = function(id) {
+            activeDeliveryDetailId = activeDeliveryDetailId === id ? null : id;
+            renderDeliveries(allDeliveries);
+        };
+
+        window.searchDeliveries = function(keyword) {
+            const filtered = allDeliveries.filter(item => 
+                item.companyName.toLowerCase().includes(keyword.toLowerCase()) ||
+                item.materialName.toLowerCase().includes(keyword.toLowerCase())
+            );
+            renderDeliveries(filtered);
+        };
+
+        window.openDeliveryModal = () => {
+            const comSelect = document.getElementById('del-company');
+            const matSelect = document.getElementById('del-material');
+            comSelect.innerHTML = '<option value="">업체 선택</option>';
+            matSelect.innerHTML = '<option value="">품명 선택</option>';
+            allCompanies.forEach(c => comSelect.innerHTML += `<option value="${c.name}">${c.name}</option>`);
+            allMaterials.forEach(m => matSelect.innerHTML += `<option value="${m.id}" data-name="${m.name}" data-cost="${m.cost}" data-stock="${m.quantity}">${m.name} (재고: ${m.quantity})</option>`);
+            document.getElementById('delivery-modal').style.display = 'flex';
+        };
+
+        window.onMaterialChange = function(select) {
+            const opt = select.options[select.selectedIndex];
+            if(opt.value) {
+                document.getElementById('del-cost').value = Number(opt.getAttribute('data-cost')).toLocaleString();
+                document.getElementById('del-price').value = Number(opt.getAttribute('data-cost')).toLocaleString();
+            }
+        };
+
+        window.saveDelivery = async function() {
+            const matSelect = document.getElementById('del-material');
+            const selectedMat = matSelect.options[matSelect.selectedIndex];
+            const data = {
+                companyName: document.getElementById('del-company').value,
+                materialId: matSelect.value,
+                materialName: selectedMat.getAttribute('data-name'),
+                cost: Number(document.getElementById('del-cost').value.replace(/,/g, '')),
+                deliveryPrice: Number(document.getElementById('del-price').value.replace(/,/g, '')),
+                quantity: Number(document.getElementById('del-quantity').value.replace(/,/g, '')),
+                updatedAt: serverTimestamp(),
+                createdAt: serverTimestamp()
+            };
+            if(!data.companyName || !data.materialId || !data.quantity) return alert('모든 항목을 입력해주세요.');
+            const currentStock = Number(selectedMat.getAttribute('data-stock'));
+            if(currentStock < data.quantity) return alert(`재고가 부족합니다. (현재 재고: ${currentStock})`);
+            try {
+                await addDoc(collection(db, "deliveries"), data);
+                await updateDoc(doc(db, "materials", data.materialId), { quantity: currentStock - data.quantity, updatedAt: serverTimestamp() });
+                closeDeliveryModal();
+            } catch (e) { alert('오류: ' + e.message); }
+        };
+
+        window.deleteDelivery = async function(id, matId, quantity) {
+            if (confirm('삭제 시 자재 재고가 다시 증가합니다. 진행하시겠습니까?')) {
+                try {
+                    const matRef = doc(db, "materials", matId);
+                    const matSnap = await getDoc(matRef);
+                    if(matSnap.exists()) await updateDoc(matRef, { quantity: (matSnap.data().quantity || 0) + quantity, updatedAt: serverTimestamp() });
+                    await deleteDoc(doc(db, "deliveries", id));
+                } catch (e) { alert('오류: ' + e.message); }
+            }
+        };
+
+        window.closeDeliveryModal = () => { document.getElementById('delivery-modal').style.display = 'none'; document.getElementById('delivery-form').reset(); };
 
         window.renderCompanies = function(data) {
             const listBody = document.getElementById('company-list');
@@ -366,6 +485,7 @@
             <div class="logo"><i data-lucide="package"></i> C-DATA</div>
             <div class="menu-item active" onclick="showSection('material')"><i data-lucide="boxes"></i> 자재관리</div>
             <div class="menu-item" onclick="showSection('company')"><i data-lucide="building-2"></i> 업체관리</div>
+            <div class="menu-item" onclick="showSection('delivery')"><i data-lucide="truck"></i> 납품관리</div>
             <div class="menu-item" onclick="showSection('sales')"><i data-lucide="trending-up"></i> 매출관리</div>
             <div class="menu-item" onclick="showSection('profile')" style="margin-top: auto;"><i data-lucide="user-cog"></i> 계정설정</div>
             <div class="menu-item" onclick="logout()" style="color: #ef4444;"><i data-lucide="log-out"></i> 로그아웃</div>
@@ -408,8 +528,47 @@
                     <tbody id="company-list"></tbody>
                 </table>
             </div>
+            <div id="delivery-section" class="section">
+                <div class="header-bar">
+                    <div class="search-container"><i data-lucide="search" class="search-icon"></i><input type="text" placeholder="업체명 또는 품명 검색..." oninput="searchDeliveries(this.value)"></div>
+                    <div class="btn-group">
+                        <button onclick="openDeliveryModal()" class="btn-primary"><i data-lucide="plus"></i> 추가</button>
+                    </div>
+                </div>
+                <table>
+                    <thead>
+                        <tr><th>업체명</th><th>품명</th><th class="text-right">납품수량</th><th class="text-right">합계금액</th></tr>
+                    </thead>
+                    <tbody id="delivery-list"></tbody>
+                </table>
+            </div>
             <div id="sales-section" class="section"><h2>매출관리</h2><p>준비 중입니다.</p></div>
         </main>
+    </div>
+    <div id="delivery-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h3 style="margin-top:0; font-size:1.1rem;">새 납품 등록</h3>
+            <form id="delivery-form">
+                <label style="font-size:0.8rem; font-weight:700;">업체명 *</label>
+                <select id="del-company" style="width:100%; padding:0.6rem; margin:0.3rem 0 0.7rem; border:1px solid var(--border); border-radius:6px; background:#fff;"></select>
+                
+                <label style="font-size:0.8rem; font-weight:700;">납품물품 (자재) *</label>
+                <select id="del-material" onchange="onMaterialChange(this)" style="width:100%; padding:0.6rem; margin:0.3rem 0 0.7rem; border:1px solid var(--border); border-radius:6px; background:#fff;"></select>
+                
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
+                    <div><label style="font-size:0.8rem; font-weight:700;">원가</label><input type="text" id="del-cost" readonly style="width:100%; padding:0.6rem; margin:0.3rem 0 0.7rem; border:1px solid var(--border); border-radius:6px; background:#f8fafc;"></div>
+                    <div><label style="font-size:0.8rem; font-weight:700;">납품가</label><input type="text" id="del-price" oninput="formatNumberInput(this)" placeholder="0" style="width:100%; padding:0.6rem; margin:0.3rem 0 0.7rem; border:1px solid var(--border); border-radius:6px;"></div>
+                </div>
+                
+                <label style="font-size:0.8rem; font-weight:700;">납품수량 *</label>
+                <input type="text" id="del-quantity" oninput="formatNumberInput(this)" placeholder="0" style="width:100%; padding:0.6rem; margin:0.3rem 0 0.7rem; border:1px solid var(--border); border-radius:6px;">
+                
+                <div style="display:flex; justify-content: flex-end; gap:8px; margin-top:0.5rem;">
+                    <button type="button" style="background:#f1f5f9; color:#475569;" onclick="closeDeliveryModal()">취소</button>
+                    <button type="button" class="btn-primary" onclick="saveDelivery()">저장하기</button>
+                </div>
+            </form>
+        </div>
     </div>
     <div id="company-modal" class="modal-overlay">
         <div class="modal-content">
