@@ -24,6 +24,8 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
 
+        const APP_VERSION = "1.1.0 (24.04.10)";
+
         let currentEditId = null;
         let allMaterials = [];
         let activeDetailId = null;
@@ -536,7 +538,11 @@
         };
 
         window.logout = () => { if(confirm('로그아웃?')) location.reload(); };
-        window.onload = () => lucide.createIcons();
+        window.onload = () => {
+            if(window.lucide) lucide.createIcons();
+            const verDiv = document.getElementById('version-display');
+            if(verDiv) verDiv.innerText = `C-DATA Build: ${APP_VERSION}`;
+        };
     </script>
     <style>
         :root { --primary: #2563eb; --bg: #f8fafc; --text: #1e293b; --border: #e2e8f0; }
@@ -617,6 +623,7 @@
             <input type="text" id="login-id" placeholder="아이디">
             <input type="password" id="login-pw" placeholder="비밀번호">
             <button onclick="login(event)" class="btn-primary" style="width: 100%; justify-content: center;">접속하기</button>
+            <div id="version-display" style="text-align: center; margin-top: 1rem; font-size: 0.75rem; color: #94a3b8;"></div>
         </div>
     </div>
     <div id="main-container">
