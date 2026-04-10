@@ -134,6 +134,11 @@
             lucide.createIcons();
         };
 
+        window.toggleDeliveryDetail = function(id) {
+            activeDeliveryDetailId = (activeDeliveryDetailId === id) ? null : id;
+            renderDeliveries(allDeliveries);
+        };
+
         let currentDeliveryEditId = null;
 
         window.editDelivery = async function(id) {
