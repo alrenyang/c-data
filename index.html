@@ -273,23 +273,25 @@
                     
                     if (companyDeliveries.length > 0) {
                         deliveryHistoryHtml = `
-                            <div style="margin-top: 12px; border-top: 2px solid #f1f5f9; padding-top: 10px;">
-                                <label style="display: block; font-size: 0.75rem; color: var(--primary); font-weight: 800; margin-bottom: 6px;">📦 최근 납품 내역</label>
-                                <div style="max-height: 150px; overflow-y: auto;">
-                                    <table style="font-size: 0.8rem; background: #f8fafc; border-radius: 6px; width: 100%;">
-                                        <thead style="background: #edf2f7;">
-                                            <tr><th style="padding:4px 8px;">품명</th><th style="padding:4px 8px;" class="text-right">수량</th><th style="padding:4px 8px;" class="text-right">단가</th></tr>
-                                        </thead>
-                                        <tbody>
-                                            ${companyDeliveries.map(d => `
-                                                <tr>
-                                                    <td style="padding:4px 8px; border-bottom:1px solid #e2e8f0;">${d.materialName}</td>
-                                                    <td style="padding:4px 8px; border-bottom:1px solid #e2e8f0;" class="text-right">${d.quantity.toLocaleString()}</td>
-                                                    <td style="padding:4px 8px; border-bottom:1px solid #e2e8f0;" class="text-right">₩${d.deliveryPrice.toLocaleString()}</td>
-                                                </tr>
-                                            `).join('')}
-                                        </tbody>
-                                    </table>
+                            <div style="margin-top: 15px; border-top: 2px solid #f1f5f9; padding-top: 12px;">
+                                <label style="display: block; font-size: 0.8rem; color: var(--primary); font-weight: 800; margin-bottom: 8px; display: flex; align-items: center; gap: 4px;">
+                                    <i data-lucide="package-check" style="width:14px;"></i> 최근 납품 내역 (${companyDeliveries.length}건)
+                                </label>
+                                <div style="display: flex; flex-direction: column; gap: 8px; max-height: 200px; overflow-y: auto; padding-right: 4px;">
+                                    ${companyDeliveries.map(d => {
+                                        const dDate = d.createdAt ? new Date(d.createdAt.toDate()).toISOString().split('T')[0].substring(5) : '-'; // MM-DD 형식
+                                        return `
+                                            <div style="background: #f8fafc; padding: 10px; border-radius: 8px; border: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center;">
+                                                <div style="flex: 1;">
+                                                    <div style="font-size: 0.85rem; font-weight: 700; color: var(--text);">${d.materialName}</div>
+                                                    <div style="font-size: 0.7rem; color: #94a3b8;">${dDate} | ₩${d.deliveryPrice.toLocaleString()}</div>
+                                                </div>
+                                                <div style="text-align: right;">
+                                                    <div style="font-size: 0.9rem; font-weight: 800; color: var(--primary);">${d.quantity.toLocaleString()}<small style="font-size: 0.6rem; margin-left:1px; color:#94a3b8;">개</small></div>
+                                                </div>
+                                            </div>
+                                        `;
+                                    }).join('')}
                                 </div>
                             </div>
                         `;
